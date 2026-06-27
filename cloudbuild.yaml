@@ -1,0 +1,120 @@
+# cloudbuild.yaml — Travel Advisor AI (Google ADK edition)
+# Builds backend + frontend, deploys both to Cloud Run.
+# GOOGLE_API_KEY is stored in Secret Manager and injected at Cloud Run runtime.
+
+substitutions:
+  _REGION:       us-central1
+  _BACKEND_SVC:  travel-advisor-backend
+  _FRONTEND_SVC: travel-advisor-frontend
+  _SECRET_NAME:  GOOGLE_API_KEY   # Secret Manager secret name
+
+steps:
+  # 1. Build backend
+  - name: gcr.io/cloud-builders/docker
+    id: build-backend
+    args: [build, -t, "gcr.io/$PROJECT_ID/${_BACKEND_SVC}:$SHORT_SHA",
+                   -t, "gcr.io/$PROJECT_ID/${_BACKEND_SVC}:latest", .]
+
+  # 2. Push backend
+  - name: gcr.io/cloud-builders/docker
+    id: push-backend
+    waitFor: [build-backend]
+    args: [push, --all-tags, "gcr.io/$PROJECT_ID/${_BACKEND_SVC}"]
+
+  # 3. Deploy backend (GOOGLE_API_KEY injected from Secret Manager)
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-backend
+    waitFor: [push-backend]
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_BACKEND_SVC}
+      - --image=gcr.io/$PROJECT_ID/${_BACKEND_SVC}:$SHORT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --min-instances=0
+      - --max-instances=10
+      - --cpu=1
+      - --memory=1Gi
+      - --port=8080
+      - --set-secrets=GOOGLE_API_KEY=${_SECRET_NAME}:latest
+
+  # 4. Get backend URL
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: get-backend-url
+    waitFor: [deploy-backend]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        URL=$(gcloud run services describe ${_BACKEND_SVC} \
+              --region=${_REGION} --format='value(status.url)')
+        echo "$$URL" > /workspace/backend_url.txt
+
+  # 5. Build frontend with backend URL injected
+  - name: gcr.io/cloud-builders/docker
+    id: build-frontend
+    waitFor: [get-backend-url]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        BACKEND_URL=$(cat /workspace/backend_url.txt)
+        docker build \
+          --build-arg VITE_API_URL="$$BACKEND_URL" \
+          -t gcr.io/$PROJECT_ID/${_FRONTEND_SVC}:$SHORT_SHA \
+          -t gcr.io/$PROJECT_ID/${_FRONTEND_SVC}:latest \
+          ./frontend
+
+  # 6. Push frontend
+  - name: gcr.io/cloud-builders/docker
+    id: push-frontend
+    waitFor: [build-frontend]
+    args: [push, --all-tags, "gcr.io/$PROJECT_ID/${_FRONTEND_SVC}"]
+
+  # 7. Deploy frontend
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy-frontend
+    waitFor: [push-frontend]
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_FRONTEND_SVC}
+      - --image=gcr.io/$PROJECT_ID/${_FRONTEND_SVC}:$SHORT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --min-instances=0
+      - --max-instances=5
+      - --cpu=1
+      - --memory=256Mi
+      - --port=8080
+
+  # 8. Print URLs
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: summary
+    waitFor: [deploy-frontend]
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        B=$(gcloud run services describe ${_BACKEND_SVC}  --region=${_REGION} --format='value(status.url)')
+        F=$(gcloud run services describe ${_FRONTEND_SVC} --region=${_REGION} --format='value(status.url)')
+        echo "========================================="
+        echo "✅  DEPLOYMENT COMPLETE"
+        echo "  Frontend  : $$F"
+        echo "  Backend   : $$B"
+        echo "  API Docs  : $$B/docs"
+        echo "  Health    : $$B/health"
+        echo "========================================="
+
+images:
+  - gcr.io/$PROJECT_ID/${_BACKEND_SVC}:$SHORT_SHA
+  - gcr.io/$PROJECT_ID/${_FRONTEND_SVC}:$SHORT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
