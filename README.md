@@ -1,10 +1,12 @@
 # ✈️ Travel Advisor AI — Google ADK Edition
 
-A production-ready multi-agent travel concierge built with **Google Agent Development Kit (ADK)** and **Gemini 2.0 Flash**. Uses real ADK agent classes, `ParallelAgent` orchestration, `FunctionTool` API calls, and session memory — deployed to **GCP Cloud Run**.
+A production-ready multi-agent travel concierge built with **Google Agent Development Kit (ADK)** and **Gemini 2.5 Flash**. Uses real ADK agent classes, `ParallelAgent` orchestration, `FunctionTool` API calls, and session memory — deployed to **GCP Cloud Run**.
 
 ---
 
 ## Architecture
+
+![GCP Architecture](architecture.png)
 
 ```
 User Message
