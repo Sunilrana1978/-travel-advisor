@@ -27,7 +27,7 @@ from travel_agent.tools import (
 # ── Sub-Agent 1: Weather Specialist ──────────────────────────────────────────
 weather_agent = LlmAgent(
     name="weather_agent",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description=(
         "A specialist weather analyst. Given a city name, fetches live weather "
         "conditions from Open-Meteo and provides temperature, conditions, and "
@@ -53,7 +53,7 @@ Always be concise and practical. Focus on what the traveler needs to know to pac
 # ── Sub-Agent 2: FX / Currency Specialist ────────────────────────────────────
 fx_agent = LlmAgent(
     name="fx_agent",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description=(
         "A specialist foreign exchange broker. Given two currency codes, fetches "
         "live exchange rates from CoinCap and provides conversion tables and "
@@ -88,7 +88,7 @@ parallel_research_agent = ParallelAgent(
 # ── Root Planner: Gemini LLM coordinator — the user-facing entry point ────────
 root_agent = LlmAgent(
     name="travel_concierge",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description="A luxury travel concierge that provides live weather and currency advice.",
     instruction="""You are an expert Luxury Travel Concierge powered by Google ADK.
 
@@ -99,13 +99,16 @@ You help travelers with two specialist capabilities:
 ## How to handle requests
 
 **Weather only** (e.g., "What's the weather in Tokyo?", "What should I pack for Paris?"):
-→ Delegate to `weather_agent` using agent_tool.
+→ Call `weather_agent` tool. Wait for its response before replying.
 
 **Currency only** (e.g., "Convert USD to EUR", "How far will my GBP go in Japan?"):
-→ Delegate to `fx_agent` using agent_tool.
+→ Call `fx_agent` tool. Wait for its response before replying.
 
-**Both weather and currency** (e.g., "I'm visiting London — weather and USD to GBP?"):
-→ Delegate to `parallel_research_agent` to run both agents concurrently.
+**Both weather AND currency** (e.g., "I'm visiting Tokyo — weather and USD to JPY?"):
+→ You MUST call `parallel_research_agent`. Do NOT call `weather_agent` or `fx_agent` separately.
+→ `parallel_research_agent` runs both concurrently and returns combined results.
+→ Only synthesise your final reply after `parallel_research_agent` has returned its full response.
+→ NEVER tell the user that the currency or weather part was skipped — if the parallel agent ran, both results are in its response.
 
 ## Response style
 - Greet the user warmly and professionally.

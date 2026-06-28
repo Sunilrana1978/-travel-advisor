@@ -146,36 +146,28 @@ def get_exchange_rate(base_currency: str, target_currency: str) -> dict:
         A dict with the exchange rate, inverse rate, and example conversion
         amounts (10, 50, 100, 500, 1000 units of the base currency).
     """
-    url = "https://api.coincap.io/v2/rates"
+    base = base_currency.strip().upper()
+    target = target_currency.strip().upper()
+    url = f"https://open.er-api.com/v6/latest/{base}"
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "TravelAdvisorADK/2.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
 
-        rates: dict[str, float] = {}
-        for item in data.get("data", []):
-            sym = item.get("symbol", "").lower()
-            try:
-                rates[sym] = float(item.get("rateUsd", 0))
-            except (ValueError, TypeError):
-                pass
+        if data.get("result") != "success":
+            return {"status": "error", "message": f"Currency '{base}' not found or API error."}
 
-        b = base_currency.strip().lower()
-        t = target_currency.strip().lower()
+        rates = data.get("rates", {})
+        if target not in rates:
+            return {"status": "error", "message": f"Currency '{target}' not found."}
 
-        if b not in rates:
-            return {"status": "error", "message": f"Currency '{base_currency.upper()}' not found."}
-        if t not in rates:
-            return {"status": "error", "message": f"Currency '{target_currency.upper()}' not found."}
-
-        # 1 base = (base_usd_rate / target_usd_rate) target
-        rate = rates[b] / rates[t]
+        rate = rates[target]
         examples = {str(amt): round(amt * rate, 2) for amt in [10, 50, 100, 500, 1000]}
 
         return {
             "status": "ok",
-            "base_currency": base_currency.upper(),
-            "target_currency": target_currency.upper(),
+            "base_currency": base,
+            "target_currency": target,
             "exchange_rate": round(rate, 6),
             "inverse_rate": round(1 / rate, 6),
             "example_conversions": examples,

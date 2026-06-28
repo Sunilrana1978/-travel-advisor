@@ -233,7 +233,7 @@ Edit `CITY_COORDS` in `travel_agent/tools.py`.
 # agent.py
 hotel_agent = LlmAgent(
     name="hotel_agent",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     instruction="You find hotel recommendations...",
     tools=[search_hotels],  # your FunctionTool
 )
